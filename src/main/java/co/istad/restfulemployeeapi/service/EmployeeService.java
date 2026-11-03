@@ -10,6 +10,7 @@ public interface EmployeeService {
 
     // CRUD: Create, Read, Update, Delete
     List<EmployeeResponse> getAll();
+    List<EmployeeResponse> searchByName(String name);
     EmployeeResponse getEmployeeById(Integer id);
 
     EmployeeResponse createEmployee(CreateEmployeeRequest employeeRequest);

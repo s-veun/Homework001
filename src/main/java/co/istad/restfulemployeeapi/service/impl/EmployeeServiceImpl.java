@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -21,30 +22,33 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final EmployeeRepository repository;
     private final EmployeeMapper employeeMapper;
 
-    private static int nextId = 3;
+    private int nextId = 3;
 
     @Override
     public List<EmployeeResponse> getAll() {
         return repository.getEmployees()
                 .stream()
                 .map(employeeMapper::toResponse)
-                // emp -> mapper.toResponse(emp)
+                .toList();
+    }
+
+    @Override
+    public List<EmployeeResponse> searchByName(String name) {
+        String searchTerm = name.trim().toLowerCase(Locale.ROOT);
+        if (searchTerm.isEmpty()) {
+            return List.of();
+        }
+
+        return repository.getEmployees()
+                .stream()
+                .filter(employee -> employee.getName().toLowerCase(Locale.ROOT).contains(searchTerm))
+                .map(employeeMapper::toResponse)
                 .toList();
     }
 
     @Override
     public EmployeeResponse getEmployeeById(Integer id) {
-        return repository.getEmployees()
-                .stream()
-                .filter(emp -> emp.getId().equals(id))
-                .findFirst()
-                .map(employeeMapper::toResponse)
-                .orElseThrow(
-                        () -> new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "Employee with id: %d not found".formatted(id)
-                        )
-                );
+        return employeeMapper.toResponse(findEmployeeById(id));
     }
 
     @Override
@@ -68,18 +72,49 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     public EmployeeResponse updateEmployeeById(Integer id, UpdateEmployeeRequest updateEmployeeRequest) {
-        return null;
+        Employee employee = findEmployeeById(id);
+        if (checkIfEmailExistsForAnotherEmployee(updateEmployeeRequest.email(), id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Email already exists"
+            );
+        }
+
+        employee.setName(updateEmployeeRequest.name());
+        employee.setEmail(updateEmployeeRequest.email());
+        employee.setSalary(updateEmployeeRequest.salary());
+        employee.setHireDate(updateEmployeeRequest.hireDate());
+
+        return employeeMapper.toResponse(employee);
     }
 
     @Override
     public void deleteEmployeeById(Integer id) {
-
+        Employee employee = findEmployeeById(id);
+        repository.getEmployees().remove(employee);
     }
 
     private boolean checkIfEmailExists(String email) {
+        return email != null && repository.getEmployees()
+                .stream()
+                .anyMatch(emp -> email.equals(emp.getEmail()));
+    }
+
+    private boolean checkIfEmailExistsForAnotherEmployee(String email, Integer id) {
+        return email != null && repository.getEmployees()
+                .stream()
+                .anyMatch(employee -> !employee.getId().equals(id) && email.equals(employee.getEmail()));
+    }
+
+    private Employee findEmployeeById(Integer id) {
         return repository.getEmployees()
                 .stream()
-                .anyMatch(emp -> emp.getEmail().equals(email));
+                .filter(employee -> employee.getId().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Employee with id: %d not found".formatted(id)
+                ));
     }
 
 }
